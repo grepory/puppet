@@ -85,6 +85,12 @@ This will result in /path/to/extdata/hosts/your.box.com.csv being searched.
 
 This is for back compatibility to interpolate variables with %. % interpolation is a workaround for a problem that has been fixed: Puppet variable interpolation at top scope used to only happen on each run.") do |args|
 
+    def get_from_csv(key, file)
+    end
+    
+    def get_from_yaml(key, file)
+    end
+
     key = args[0]
 
     default  = args[1]
@@ -106,66 +112,52 @@ This is for back compatibility to interpolate variables with %. % interpolation 
     end
 
     extlookup_precedence.each do |d|
-      supported_extensions.each do |extension|
-        datafiles << extlookup_datadir + "/#{d}.#{extension}"
-      end
+      datafiles << extlookup_datadir + "/#{d}"
     end
 
-    puts "datafiles = " + datafiles.inspect
     desired = nil
-
-    puts "extlookup_datadir = " + extlookup_datadir
 
     datafiles.each do |datafile|
       if desired.nil?
-        extension = supported_extensions.find { |ext| File.exists?(extlookup_datadir + "/#{datafile}.#{ext}") }
-        puts "extension = " + extension.inspect
+        extension = supported_extensions.find { |ext| File.exists?("#{datafile}.#{ext}") }
         next unless extension
-        file = extlookup_datadir + "/#{datafile}.#{extension}"
+        file = "#{datafile}.#{extension}"
 
-        desired = case extension
-                  when 'csv'  then get_from_csv(key, file)
-                  when 'yaml' then get_from_yaml(key, file)
-                  end
+        if extension == 'csv'
+          result = CSV.read(file).find { |r| r[0] == key }
 
+          # return just the single result if theres just one,
+          # else take all the fields in the csv and build an array
+          if result
+            if result.length == 2
+              val = result[1].to_s
+
+              # parse %{}'s in the CSV into local variables using lookupvar()
+              while val =~ /%\{(.+?)\}/
+                val.gsub!(/%\{#{$1}\}/, lookupvar($1))
+              end
+              desired = val
+            elsif result.length > 1
+              (csv_key, *cells) = result
+
+              # Individual cells in a CSV result are a weird data type and throws
+              # puppets yaml parsing, so just map it all to plain old strings
+              cells.map do |v|
+                while v =~ /%\{(.+?)\}/
+                  v.gsub!(/%\{#{$1}\}/, lookupvar($1))
+                end
+              end
+              desired = cells
+            end
+          end
+        elsif extension == 'yaml'
+          y = YAML.load(file)
+          desired = y[key] if y.has_key?(key)
+        end
       end
     end
 
-    puts "desired = " + desired.inspect
     desired || default or raise Puppet::ParseError, "No match found for '#{key}' in any data file during extlookup()"
   
-  end
-
-  def substitute_variables(value)
-    while value =~ /%\{(.+?)\}/
-      value.gsub!(/%\{#{$1}\}/, lookupvar($1))
-    end
-    value
-  end
-
-  def get_from_csv(key, file)
-    result = CSV.read(file).find { |r| r == key }
-
-    # return just the single result if theres just one,
-    # else take all the fields in the csv and build an array
-    if result
-      if result.length == 2
-        val = result[1].to_s
-
-        # parse %{}'s in the CSV into local variables using lookupvar()
-        substitute_variables(value)
-      elsif result.length > 1
-        (csv_key, *cells) = result
-
-        # Individual cells in a CSV result are a weird data type and throws
-        # puppets yaml parsing, so just map it all to plain old strings
-        cells.map(&:substitute_variables)
-      end
-    end
-  end
-  
-  def get_from_yaml(key, file)
-    y = YAML.load(file)
-    y[key] if y.has_key?(key)
   end
 end
