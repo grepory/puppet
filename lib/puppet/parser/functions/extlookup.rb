@@ -151,7 +151,7 @@ This is for back compatibility to interpolate variables with %. % interpolation 
             end
           end
         elsif extension == 'yaml'
-          y = YAML.load(file)
+          y = YAML.load_file(file)
           desired = y[key] if y.has_key?(key)
         end
       end
