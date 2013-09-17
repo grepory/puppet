@@ -4,8 +4,9 @@ module Puppet::Parser::Functions
   newfunction(:extlookup,
   :type => :rvalue,
   :doc => "This is a parser function to read data from external files, this version
-uses CSV files but the concept can easily be adjust for databases, yaml
-or any other queryable data source.
+supports CSV and YAML files but the concept can easily be adjust for databases
+or any other queryable data source. When both a CSV and YAML file exist, always prefer 
+the YAML.
 
 The object of this is to make it obvious when it's being used, rather than
 magically loading data in when an module is loaded I prefer to look at the code
@@ -84,69 +85,87 @@ This will result in /path/to/extdata/hosts/your.box.com.csv being searched.
 
 This is for back compatibility to interpolate variables with %. % interpolation is a workaround for a problem that has been fixed: Puppet variable interpolation at top scope used to only happen on each run.") do |args|
 
-  key = args[0]
+    key = args[0]
 
-  default  = args[1]
-  datafile = args[2]
+    default  = args[1]
+    datafile = args[2]
 
-  raise Puppet::ParseError, ("extlookup(): wrong number of arguments (#{args.length}; must be <= 3)") if args.length > 3
+    raise Puppet::ParseError, ("extlookup(): wrong number of arguments (#{args.length}; must be <= 3)") if args.length > 3
 
-  extlookup_datadir = undef_as('',lookupvar('::extlookup_datadir'))
+    supported_extensions = [ 'yaml', 'csv' ]
 
-  extlookup_precedence = undef_as([],lookupvar('::extlookup_precedence')).collect { |var| var.gsub(/%\{(.+?)\}/) { lookupvar("::#{$1}") } }
+    extlookup_datadir = undef_as('',lookupvar('::extlookup_datadir'))
 
-  datafiles = Array.new
+    extlookup_precedence = undef_as([],lookupvar('::extlookup_precedence')).collect { |var| var.gsub(/%\{(.+?)\}/) { lookupvar("::#{$1}") } }
 
-  # if we got a custom data file, put it first in the array of search files
-  if datafile != ""
-    datafiles << extlookup_datadir + "/#{datafile}.csv" if File.exists?(extlookup_datadir + "/#{datafile}.csv")
+    datafiles = []
+
+    # if we got a custom data file, add it to the front of the list of places to look
+    if datafile && datafile != ""
+      extlookup_precedence.unshift(datafile)
+    end
+
+    extlookup_precedence.each do |d|
+      supported_extensions.each do |extension|
+        datafiles << extlookup_datadir + "/#{d}.#{extension}"
+      end
+    end
+
+    puts "datafiles = " + datafiles.inspect
+    desired = nil
+
+    puts "extlookup_datadir = " + extlookup_datadir
+
+    datafiles.each do |datafile|
+      if desired.nil?
+        extension = supported_extensions.find { |ext| File.exists?(extlookup_datadir + "/#{datafile}.#{ext}") }
+        puts "extension = " + extension.inspect
+        next unless extension
+        file = extlookup_datadir + "/#{datafile}.#{extension}"
+
+        desired = case extension
+                  when 'csv'  then get_from_csv(key, file)
+                  when 'yaml' then get_from_yaml(key, file)
+                  end
+
+      end
+    end
+
+    puts "desired = " + desired.inspect
+    desired || default or raise Puppet::ParseError, "No match found for '#{key}' in any data file during extlookup()"
+  
   end
 
-  extlookup_precedence.each do |d|
-    datafiles << extlookup_datadir + "/#{d}.csv"
+  def substitute_variables(value)
+    while value =~ /%\{(.+?)\}/
+      value.gsub!(/%\{#{$1}\}/, lookupvar($1))
+    end
+    value
   end
 
-  desired = nil
+  def get_from_csv(key, file)
+    result = CSV.read(file).find { |r| r == key }
 
-  datafiles.each do |file|
-    if desired.nil?
-      if File.exists?(file)
-        result = CSV.read(file).find_all do |r|
-          r[0] == key
-        end
+    # return just the single result if theres just one,
+    # else take all the fields in the csv and build an array
+    if result
+      if result.length == 2
+        val = result[1].to_s
 
-        # return just the single result if theres just one,
-        # else take all the fields in the csv and build an array
-        if result.length > 0
-          if result[0].length == 2
-            val = result[0][1].to_s
+        # parse %{}'s in the CSV into local variables using lookupvar()
+        substitute_variables(value)
+      elsif result.length > 1
+        (csv_key, *cells) = result
 
-            # parse %{}'s in the CSV into local variables using lookupvar()
-            while val =~ /%\{(.+?)\}/
-              val.gsub!(/%\{#{$1}\}/, lookupvar($1))
-            end
-
-            desired = val
-          elsif result[0].length > 1
-            length = result[0].length
-            cells = result[0][1,length]
-
-            # Individual cells in a CSV result are a weird data type and throws
-            # puppets yaml parsing, so just map it all to plain old strings
-            desired = cells.map do |c|
-              # parse %{}'s in the CSV into local variables using lookupvar()
-              while c =~ /%\{(.+?)\}/
-                c.gsub!(/%\{#{$1}\}/, lookupvar($1))
-              end
-
-              c.to_s
-            end
-          end
-        end
+        # Individual cells in a CSV result are a weird data type and throws
+        # puppets yaml parsing, so just map it all to plain old strings
+        cells.map(&:substitute_variables)
       end
     end
   end
-
-  desired || default or raise Puppet::ParseError, "No match found for '#{key}' in any data file during extlookup()"
+  
+  def get_from_yaml(key, file)
+    y = YAML.load(file)
+    y[key] if y.has_key?(key)
   end
 end
