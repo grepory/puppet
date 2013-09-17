@@ -94,5 +94,56 @@ describe "the extlookup function" do
       result = @scope.function_extlookup([ "key" ])
       variable.should == '%{fqdn}'
     end
+
   end
+
+  describe "should read yaml files in precedence to csv files" do
+    before do
+      dir = tmpdir('extlookup_datadir')
+      @scope.stubs(:lookupvar).with('::extlookup_datadir').returns(dir)
+      File.open(File.join(dir, "three.yaml"), "w") { |three| three.puts "key3: value_three" }
+      File.open(File.join(dir, "three.csv"), "w") { |notthree| notthree.puts "key3,value3" }
+    end
+
+    it "reads the yaml" do
+      @scope.stubs(:lookupvar).with('::extlookup_precedence').returns(["three"])
+      result = @scope.function_extlookup([ "key3" ])
+      result.should == "value_three"
+    end
+  end
+
+  it "should return an array if the yaml file contains more than two columns" do
+    t = Tempfile.new('extlookup.yaml') do
+      t.puts 'key:'
+      t.puts '  - value1'
+      t.puts '  - value2'
+      t.puts 'nonkey:'
+      t.puts '  - nonvalue1'
+      t.puts '  - nonvalue2'
+      t.close
+      result = @scope.function_extlookup([ "key", "default", t.path])
+      result.should == ["value1", "value2"]
+    end
+  end
+
+  it "should return expanded variables in yaml" do
+    t = Tempfile.new('vary.yaml') do
+      t.puts 'key: %{foobar}'
+      t.close
+      @scope.stubs(:lookupvar).with('::foobar').returns('myfoobar')
+      result = @scope.function_extlookup([ "key", "default", t.path])
+      result.should == 'myfoobar'
+    end
+  end
+ 
+  it "should return expanded variables in csv" do
+    t = Tempfile.new('vary.csv') do
+      t.puts 'key,%{foobar}'
+      t.close
+      @scope.stubs(:lookupvar).with('::foobar').returns('myfoobar')
+      result = @scope.function_extlookup([ "key", "default", t.path])
+      result.should == 'myfoobar'
+    end
+  end
+ 
 end
