@@ -132,7 +132,7 @@ This is for back compatibility to interpolate variables with %. % interpolation 
               end
               desired = val
             elsif result.length > 1
-              (csv_key, *cells) = result
+              cells = result[0..result.length]
 
               # Individual cells in a CSV result are a weird data type and throws
               # puppets yaml parsing, so just map it all to plain old strings
