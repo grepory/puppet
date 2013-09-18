@@ -135,7 +135,7 @@ describe "the extlookup function" do
       result.should == 'myfoobar'
     end
   end
- 
+
   it "should return expanded variables in csv" do
     t = Tempfile.new('vary.csv') do
       t.puts 'key,%{foobar}'
@@ -145,5 +145,5 @@ describe "the extlookup function" do
       result.should == 'myfoobar'
     end
   end
- 
+
 end
