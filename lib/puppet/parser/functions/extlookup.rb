@@ -85,12 +85,6 @@ This will result in /path/to/extdata/hosts/your.box.com.csv being searched.
 
 This is for back compatibility to interpolate variables with %. % interpolation is a workaround for a problem that has been fixed: Puppet variable interpolation at top scope used to only happen on each run.") do |args|
 
-    def get_from_csv(key, file)
-    end
-    
-    def get_from_yaml(key, file)
-    end
-
     key = args[0]
 
     default  = args[1]
@@ -107,7 +101,7 @@ This is for back compatibility to interpolate variables with %. % interpolation 
     datafiles = []
 
     # if we got a custom data file, add it to the front of the list of places to look
-    if datafile && datafile != ""
+    unless "#{datafile}".empty?
       extlookup_precedence.unshift(datafile)
     end
 
@@ -138,7 +132,7 @@ This is for back compatibility to interpolate variables with %. % interpolation 
               end
               desired = val
             elsif result.length > 1
-              (csv_key, *cells) = result
+              cells = result[0..result.length]
 
               # Individual cells in a CSV result are a weird data type and throws
               # puppets yaml parsing, so just map it all to plain old strings
@@ -158,6 +152,6 @@ This is for back compatibility to interpolate variables with %. % interpolation 
     end
 
     desired || default or raise Puppet::ParseError, "No match found for '#{key}' in any data file during extlookup()"
-  
+
   end
 end
