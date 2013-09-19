@@ -5,7 +5,7 @@ module Puppet::Parser::Functions
   :type => :rvalue,
   :doc => "This is a parser function to read data from external files, this version
 supports CSV and YAML files but the concept can easily be adjust for databases
-or any other queryable data source. When both a CSV and YAML file exist, always prefer 
+or any other queryable data source. When both a CSV and YAML file exist, always prefer
 the YAML.
 
 The object of this is to make it obvious when it's being used, rather than
