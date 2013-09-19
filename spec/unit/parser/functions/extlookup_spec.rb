@@ -145,13 +145,47 @@ describe "the extlookup function" do
     t.close
     result = @scope.function_extlookup([ "key", "default", t.path])
     result.should be_a_kind_of(Hash)
-    result.should have_key('v3')
+    result.should have_key('v1')
     result.should have_key('v2')
     result.should have(2).items
-    result.should =~ {'v3'=>'value1', 'v2'=>'value2'}
+    result.should =~ {'v1'=>'value1', 'v2'=>'value2'}
   end
 
-  it "should return expanded variables in yaml" do
+  it "should return expanded variables in yaml array values" do
+    dir = tmpdir('extlookup_datadir')
+    @scope.stubs(:lookupvar).with('::extlookup_datadir').returns(dir)
+    @scope.stubs(:lookupvar).with('::extlookup_precedence').returns([])
+    t = Tempfile.new(['vary','.yaml'])
+    t.puts 'key:'
+    t.puts '  - %{foobar}'
+    t.puts '  - val%{foobar}ue'
+    t.puts 'nonkey: nonvalue'
+    t.close
+    @scope.stubs(:lookupvar).with('::foobar').returns('myfoobar')
+    result = @scope.function_extlookup([ "key", "default", t.path])
+    result.should =~ ['myfoobar','valmyfoobarue']
+  end
+ 
+  it "should return expanded variables in yaml hash values" do
+    dir = tmpdir('extlookup_datadir')
+    @scope.stubs(:lookupvar).with('::extlookup_datadir').returns(dir)
+    @scope.stubs(:lookupvar).with('::extlookup_precedence').returns([])
+    t = Tempfile.new(['vary','.yaml'])
+    t.puts 'key:'
+    t.puts '  v1: %{foobar}'
+    t.puts '  v2: val%{foobar}ue'
+    t.puts 'nonkey: nonvalue'
+    t.close
+    @scope.stubs(:lookupvar).with('::foobar').returns('myfoobar')
+    result = @scope.function_extlookup([ "key", "default", t.path])
+    result.should be_a_kind_of(Hash)
+    result.should have_key('v1')
+    result.should have_key('v2')
+    result.should have(2).items
+    result.should =~ {'v1'=>'myfoobar', 'v2'=>'valmyfoobarue'}
+  end
+ 
+  it "should return expanded variables in yaml string values" do
     dir = tmpdir('extlookup_datadir')
     @scope.stubs(:lookupvar).with('::extlookup_datadir').returns(dir)
     @scope.stubs(:lookupvar).with('::extlookup_precedence').returns([])
