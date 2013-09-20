@@ -2,6 +2,7 @@ require 'csv'
 
 module Puppet::Parser::Functions
 
+
   newfunction(:extlookup,
   :type => :rvalue,
   :doc => "This is a parser function to read data from external files, this version
@@ -93,46 +94,13 @@ This is for back compatibility to interpolate variables with %. % interpolation 
 
     raise Puppet::ParseError, ("extlookup(): wrong number of arguments (#{args.length}; must be <= 3)") if args.length > 3
     
-    substitute_variables = lambda { |val|
-      puts "val.class = #{val.class}"
-      puts "val.inspect = #{val.inspect}"
-      case val
-      when String
-        # parse %{}'s in the CSV into local variables using lookupvar()
-        while val =~ /%\{(.+?)\}/
-          val.gsub!(/%\{#{$1}\}/, lookupvar($1))
-        end
-        val
-      when Array
-        val.map { |v| substitute_variables.call(v) }
-      when Hash
-        val.each_key { |k| val[k] = substitute_variables.call(val[k]) }
-      else
-        val
-      end
-    }
 
     parse_csv = lambda { |file|
-      result = CSV.read(file).find { |r| r[0] == key }
-
-      # return just the single result if theres just one,
-      # else take all the fields in the csv and build an array
-      if result
-        if result.length == 2
-          substitute_variables.call(result[1].to_s)
-        elsif result.length > 1
-          # Individual cells in a CSV result are a weird data type and throws
-          # puppets yaml parsing, so just map it all to plain old strings
-          result[1..result.length].map do |v|
-            v = substitute_variables.call(v)
-          end
-        end
-      end
+      Puppet::Parser::Functions.autoloader.loadall
     }
 
     parse_yaml = lambda { |file|
-      y = YAML.load_file(file)
-      substitute_variables.call(y[key]) if y.has_key?(key)
+      Puppet::Parser::Functions.autoloader.loadall
     }
 
     supported_extensions = [ yaml_extension, csv_extension ]
@@ -163,9 +131,24 @@ This is for back compatibility to interpolate variables with %. % interpolation 
       unless desired
         desired = case file.split('.').last.downcase
                   when csv_extension
-                    parse_csv.call(file)
+                    result = CSV.read(file).find { |r| r[0] == key }
+
+                    # return just the single result if theres just one,
+                    # else take all the fields in the csv and build an array
+                    if result
+                      if result.length == 2
+                        function_substitute_variables([result[1].to_s])
+                      elsif result.length > 1
+                        # Individual cells in a CSV result are a weird data type and throws
+                        # puppets yaml parsing, so just map it all to plain old strings
+                        result[1..result.length].map do |v|
+                          v = function_substitute_variables([v])
+                        end
+                      end
+                    end
                   when yaml_extension
-                    parse_yaml.call(file)
+                    y = YAML.load_file(file)
+                    function_substitute_variables([y[key]]) if y.has_key?(key)
                   end
       end
     end

@@ -156,11 +156,11 @@ describe "the extlookup function" do
     @scope.stubs(:lookupvar).with('::extlookup_precedence').returns([])
     t = Tempfile.new(['vary','.yaml'])
     t.puts 'key:'
-    t.puts '  - %{foobar}'
-    t.puts '  - val%{foobar}ue'
+    t.puts '  - "%{foobar}"'
+    t.puts '  - "val%{foobar}ue"'
     t.puts 'nonkey: nonvalue'
     t.close
-    @scope.stubs(:lookupvar).with('::foobar').returns('myfoobar')
+    @scope.stubs(:lookupvar).with('foobar').returns('myfoobar')
     result = @scope.function_extlookup([ "key", "default", t.path])
     result.should =~ ['myfoobar','valmyfoobarue']
   end
@@ -171,11 +171,11 @@ describe "the extlookup function" do
     @scope.stubs(:lookupvar).with('::extlookup_precedence').returns([])
     t = Tempfile.new(['vary','.yaml'])
     t.puts 'key:'
-    t.puts '  v1: %{foobar}'
-    t.puts '  v2: val%{foobar}ue'
+    t.puts '  v1: "%{foobar}"'
+    t.puts '  v2: "val%{foobar}ue"'
     t.puts 'nonkey: nonvalue'
     t.close
-    @scope.stubs(:lookupvar).with('::foobar').returns('myfoobar')
+    @scope.stubs(:lookupvar).with('foobar').returns('myfoobar')
     result = @scope.function_extlookup([ "key", "default", t.path])
     result.should be_a_kind_of(Hash)
     result.should have_key('v1')
@@ -184,14 +184,36 @@ describe "the extlookup function" do
     result.should include('v1'=>'myfoobar', 'v2'=>'valmyfoobarue')
   end
  
+  it "should return expanded variables in yaml hash array values" do
+    dir = tmpdir('extlookup_datadir')
+    @scope.stubs(:lookupvar).with('::extlookup_datadir').returns(dir)
+    @scope.stubs(:lookupvar).with('::extlookup_precedence').returns([])
+    t = Tempfile.new(['vary','.yaml'])
+    t.puts 'key:'
+    t.puts '  v1:'
+    t.puts '    - "before"'
+    t.puts '    - "%{foobar}"'
+    t.puts '    - "after"'
+    t.puts '  v2:'
+    t.puts 'nonkey: nonvalue'
+    t.close
+    @scope.stubs(:lookupvar).with('foobar').returns('myfoobar')
+    result = @scope.function_extlookup([ "key", "default", t.path])
+    result.should be_a_kind_of(Hash)
+    result.should have_key('v1')
+    result.should have_key('v2')
+    result.should have(2).items
+    result['v1'].should =~ ["before", "myfoobar", "after"]
+  end
+ 
   it "should return expanded variables in yaml string values" do
     dir = tmpdir('extlookup_datadir')
     @scope.stubs(:lookupvar).with('::extlookup_datadir').returns(dir)
     @scope.stubs(:lookupvar).with('::extlookup_precedence').returns([])
     t = Tempfile.new(['vary','.yaml'])
-    t.puts 'key: %{foobar}'
+    t.puts 'key: "%{foobar}"'
     t.close
-    @scope.stubs(:lookupvar).with('::foobar').returns('myfoobar')
+    @scope.stubs(:lookupvar).with('foobar').returns('myfoobar')
     result = @scope.function_extlookup([ "key", "default", t.path])
     result.should == 'myfoobar'
   end
@@ -203,7 +225,7 @@ describe "the extlookup function" do
     t = Tempfile.new(['vary','.csv'])
     t.puts 'key,%{foobar}'
     t.close
-    @scope.stubs(:lookupvar).with('::foobar').returns('myfoobar')
+    @scope.stubs(:lookupvar).with('foobar').returns('myfoobar')
     result = @scope.function_extlookup([ "key", "default", t.path])
     result.should == 'myfoobar'
   end
