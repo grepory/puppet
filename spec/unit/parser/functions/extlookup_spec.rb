@@ -206,6 +206,18 @@ describe "the extlookup function" do
     result['v1'].should =~ ["before", "myfoobar", "after"]
   end
  
+  it "should unescape before parsing variables" do
+    dir = tmpdir('extlookup_datadir')
+    @scope.stubs(:lookupvar).with('::extlookup_datadir').returns(dir)
+    @scope.stubs(:lookupvar).with('::extlookup_precedence').returns([])
+    t = Tempfile.new(['vary','.yaml'])
+    t.puts 'key: "\\x25{foobar}"'
+    t.close
+    @scope.stubs(:lookupvar).with('foobar').returns('myfoobar')
+    result = @scope.function_extlookup([ "key", "default", t.path])
+    result.should == 'myfoobar'
+  end
+ 
   it "should return expanded variables in yaml string values" do
     dir = tmpdir('extlookup_datadir')
     @scope.stubs(:lookupvar).with('::extlookup_datadir').returns(dir)
