@@ -35,7 +35,7 @@ describe "the extlookup function" do
     dir = tmpdir('extlookup_datadir')
     @scope.stubs(:lookupvar).with('::extlookup_datadir').returns(dir)
     @scope.stubs(:lookupvar).with('::extlookup_precedence').returns([])
-    t=Tempfile.new(['extlookup','.csv']) 
+    t = Tempfile.new(['extlookup','.csv'])
     t.puts 'key,value'
     t.puts 'nonkey,nonvalue'
     t.close
@@ -48,7 +48,7 @@ describe "the extlookup function" do
     dir = tmpdir('extlookup_datadir')
     @scope.stubs(:lookupvar).with('::extlookup_datadir').returns(dir)
     @scope.stubs(:lookupvar).with('::extlookup_precedence').returns([])
-    t=Tempfile.new(['extlookup','.csv'])
+    t = Tempfile.new(['extlookup','.csv'])
     t.puts 'key,value1,value2'
     t.puts 'nonkey,nonvalue,nonvalue'
     t.close
@@ -60,8 +60,7 @@ describe "the extlookup function" do
     dir = tmpdir('extlookup_datadir')
     @scope.stubs(:lookupvar).with('::extlookup_datadir').returns(dir)
     @scope.stubs(:lookupvar).with('::extlookup_precedence').returns([])
-    t=Tempfile.new(['extlookup','.csv'])
-    t.puts 'key,value'
+    t = Tempfile.new(['extlookup','.csv'])
     t.puts 'nonkey,nonvalue'
     t.close
     lambda { @scope.function_extlookup([ "key", nil, t.path]) }.should( raise_error(Puppet::ParseError))
@@ -71,7 +70,7 @@ describe "the extlookup function" do
     before do
       dir = tmpdir('extlookup_datadir')
       @scope.stubs(:lookupvar).with('::extlookup_datadir').returns(dir)
-      File.open(File.join(dir, "one.csv"),"w"){|one| one.puts "key,value1" }
+      File.open(File.join(dir, "one.csv"),"w"){ |one| one.puts "key,value1" }
       File.open(File.join(dir, "two.csv"),"w") do |two|
         two.puts "key,value2"
         two.puts "key2,value_two"
@@ -148,7 +147,7 @@ describe "the extlookup function" do
     result.should have_key('v1')
     result.should have_key('v2')
     result.should have(2).items
-    result.should =~ {'v1'=>'value1', 'v2'=>'value2'}
+    result.should include('v1'=>'value1', 'v2'=>'value2')
   end
 
   it "should return expanded variables in yaml array values" do
@@ -182,7 +181,7 @@ describe "the extlookup function" do
     result.should have_key('v1')
     result.should have_key('v2')
     result.should have(2).items
-    result.should =~ {'v1'=>'myfoobar', 'v2'=>'valmyfoobarue'}
+    result.should include('v1'=>'myfoobar', 'v2'=>'valmyfoobarue')
   end
  
   it "should return expanded variables in yaml string values" do

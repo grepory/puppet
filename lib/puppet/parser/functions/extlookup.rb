@@ -1,44 +1,5 @@
 require 'csv'
 
-def substitute_variables(val)
-  case val.class
-  when String
-    # parse %{}'s in the CSV into local variables using lookupvar()
-    while val =~ /%\{(.+?)\}/
-      val.gsub!(/%\{#{$1}\}/, lookupvar($1))
-    end
-  when Array
-    val.map { |v| substitute_variables(v) }
-  when Hash
-    val.values.map { |v| substitute_variables(v) }
-  else
-    val
-  end
-end
-
-def parse_csv(file)
-  result = CSV.read(file).find { |r| r[0] == key }
-
-  # return just the single result if theres just one,
-  # else take all the fields in the csv and build an array
-  if result
-    if result.length == 2
-      substitute_variables(result[1].to_s)
-    elsif result.length > 1
-      # Individual cells in a CSV result are a weird data type and throws
-      # puppets yaml parsing, so just map it all to plain old strings
-      result[0..result.length].map do |v|
-        v = substitute_variables(v)
-      end
-    end
-  end
-end
-
-def parse_yaml(file)
-  y = YAML.load_file(file)
-  substitute_variables(y[key]) if y.has_key?(key)
-end
-
 module Puppet::Parser::Functions
 
   newfunction(:extlookup,
@@ -132,6 +93,48 @@ This is for back compatibility to interpolate variables with %. % interpolation 
 
     raise Puppet::ParseError, ("extlookup(): wrong number of arguments (#{args.length}; must be <= 3)") if args.length > 3
     
+    substitute_variables = lambda { |val|
+      puts "val.class = #{val.class}"
+      puts "val.inspect = #{val.inspect}"
+      case val
+      when String
+        # parse %{}'s in the CSV into local variables using lookupvar()
+        while val =~ /%\{(.+?)\}/
+          val.gsub!(/%\{#{$1}\}/, lookupvar($1))
+        end
+        val
+      when Array
+        val.map { |v| substitute_variables.call(v) }
+      when Hash
+        val.each_key { |k| val[k] = substitute_variables.call(val[k]) }
+      else
+        val
+      end
+    }
+
+    parse_csv = lambda { |file|
+      result = CSV.read(file).find { |r| r[0] == key }
+
+      # return just the single result if theres just one,
+      # else take all the fields in the csv and build an array
+      if result
+        if result.length == 2
+          substitute_variables.call(result[1].to_s)
+        elsif result.length > 1
+          # Individual cells in a CSV result are a weird data type and throws
+          # puppets yaml parsing, so just map it all to plain old strings
+          result[1..result.length].map do |v|
+            v = substitute_variables.call(v)
+          end
+        end
+      end
+    }
+
+    parse_yaml = lambda { |file|
+      y = YAML.load_file(file)
+      substitute_variables.call(y[key]) if y.has_key?(key)
+    }
+
     supported_extensions = [ yaml_extension, csv_extension ]
 
     extlookup_datadir = undef_as('',lookupvar('::extlookup_datadir'))
@@ -151,18 +154,18 @@ This is for back compatibility to interpolate variables with %. % interpolation 
 
     # if we got a custom data file, add it to the front of the list of places to look
     unless datafile.to_s.empty?
-      extlookup_precedence.unshift(datafile)
+      datafiles.unshift(datafile) if File.exists?(datafile)
     end
 
     desired = nil
 
-    datafiles.each do |datafile|
-      if desired.nil?
-        desired = case extension
+    datafiles.each do |file|
+      unless desired
+        desired = case file.split('.').last.downcase
                   when csv_extension
-                    parse_csv(file)
+                    parse_csv.call(file)
                   when yaml_extension
-                    parse_yaml(file)
+                    parse_yaml.call(file)
                   end
       end
     end
