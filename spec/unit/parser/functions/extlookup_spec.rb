@@ -241,5 +241,20 @@ describe "the extlookup function" do
     result = @scope.function_extlookup([ "key", "default", t.path])
     result.should == 'myfoobar'
   end
+
+  it "should return a cached value from csv" do
+    dir = tmpdir('extlookup_datadir')
+    @scope.stubs(:lookupvar).with('::extlookup_datadir').returns(dir)
+    @scope.stubs(:lookupvar).with('::extlookup_precedence').returns([])
+    t = Tempfile.new(['extlookup','.csv'])
+    t.puts 'key,value'
+    t.puts 'nonkey,nonvalue'
+    t.close
+    result = @scope.function_extlookup([ "key", "default", t.path])
+    result.should == "value"
+    t.unlink
+    result = @scope.function_extlookup([ "key", "default", t.path])
+    result.should == "value"
+  end
  
 end

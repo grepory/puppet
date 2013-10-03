@@ -1,7 +1,4 @@
-require 'csv'
-
 module Puppet::Parser::Functions
-
 
   newfunction(:extlookup,
   :type => :rvalue,
@@ -89,19 +86,16 @@ This is for back compatibility to interpolate variables with %. % interpolation 
 
     csv_extension = 'csv'
     yaml_extension = 'yaml'
-
+    @opower_lookup_cache ||= {}
+    
     (key, default, datafile) = args
 
     raise Puppet::ParseError, ("extlookup(): wrong number of arguments (#{args.length}; must be <= 3)") if args.length > 3
-    
 
-    parse_csv = lambda { |file|
-      Puppet::Parser::Functions.autoloader.loadall
-    }
-
-    parse_yaml = lambda { |file|
-      Puppet::Parser::Functions.autoloader.loadall
-    }
+    return @opower_lookup_cache[key] if @opower_lookup_cache.has_key?(key)
+   
+    # Pull in parse_csv, parse_yaml, substitute_variables, lookup_cache
+    Puppet::Parser::Functions.autoloader.loadall
 
     supported_extensions = [ yaml_extension, csv_extension ]
 
@@ -131,28 +125,14 @@ This is for back compatibility to interpolate variables with %. % interpolation 
       unless desired
         desired = case file.split('.').last.downcase
                   when csv_extension
-                    result = CSV.read(file).find { |r| r[0] == key }
-
-                    # return just the single result if theres just one,
-                    # else take all the fields in the csv and build an array
-                    if result
-                      if result.length == 2
-                        function_substitute_variables([result[1].to_s])
-                      elsif result.length > 1
-                        # Individual cells in a CSV result are a weird data type and throws
-                        # puppets yaml parsing, so just map it all to plain old strings
-                        result[1..result.length].map do |v|
-                          v = function_substitute_variables([v])
-                        end
-                      end
-                    end
+                    function_opower_lookup_csv([key, file])
                   when yaml_extension
-                    y = YAML.load_file(file)
-                    function_substitute_variables([y[key]]) if y.has_key?(key)
+                    function_opower_lookup_yaml([key, file])
                   end
       end
     end
 
+    @opower_lookup_cache[key] = desired || default
     desired || default or raise Puppet::ParseError, "No match found for '#{key}' in any data file during extlookup()"
 
   end
