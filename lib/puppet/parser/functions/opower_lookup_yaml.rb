@@ -5,7 +5,8 @@ module Puppet::Parser::Functions
 
     (key, file) = args
 
-    y = YAML.load_file(file)
+    @opower_lookup_cache[file] ||= YAML.load_file(file)
+    y = @opower_lookup_cache[file]
     function_substitute_variables([y[key]]) if y.has_key?(key)
   end
 end

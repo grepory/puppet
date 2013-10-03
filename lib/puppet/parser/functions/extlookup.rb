@@ -86,13 +86,22 @@ This is for back compatibility to interpolate variables with %. % interpolation 
 
     csv_extension = 'csv'
     yaml_extension = 'yaml'
+
+    # Use two-level caching. The first cache is for each of the opower_lookup functions, the
+    # second cache is for extlookup itself, as there is no need to defer to the second-order
+    # cache if we have already looked up key once. A cache miss in @opower_extlookup_cache yields
+    # population of @opower_lookup_cache. We can share cache between each of the functions because
+    # we enforce strict file naming conventions.
+    # There is no need to cache negatives, since we always cache a value (found value or default)
+    # as failure to find a value raises an exception.
     @opower_lookup_cache ||= {}
+    @opower_extlookup_cache ||= {}
     
     (key, default, datafile) = args
 
     raise Puppet::ParseError, ("extlookup(): wrong number of arguments (#{args.length}; must be <= 3)") if args.length > 3
 
-    return @opower_lookup_cache[key] if @opower_lookup_cache.has_key?(key)
+    return @opower_extlookup_cache[key] if @opower_extlookup_cache.has_key?(key)
    
     # Pull in parse_csv, parse_yaml, substitute_variables, lookup_cache
     Puppet::Parser::Functions.autoloader.loadall
@@ -103,20 +112,19 @@ This is for back compatibility to interpolate variables with %. % interpolation 
 
     # retrieve values in extlookup_precedence (e.g. from site.pp) and 
     # perform variable interpolation on each of the paths returned
-    extlookup_precedence = undef_as([],lookupvar('::extlookup_precedence')).collect { |var| var.gsub(/%\{(.+?)\}/) { lookupvar("::#{$1}") } }
+    extlookup_precedence = undef_as([],lookupvar('::extlookup_precedence')).map { |var| var.gsub(/%\{(.+?)\}/) { lookupvar("::#{$1}") } }
 
     datafiles = []
 
-    extlookup_precedence.each do |d|
-      location = extlookup_datadir + "/#{d}"
+    datafiles = extlookup_precedence.map do |d|
+      location = [extlookup_datadir, d].join('/')
       extension = supported_extensions.find { |ext| File.exists?("#{location}.#{ext}") }
-      next unless extension
-      datafiles << "#{location}.#{extension}"
-    end
+      "#{location}.#{extension}" if extension
+    end.reject(&:nil?)
 
     # if we got a custom data file, add it to the front of the list of places to look
-    unless datafile.to_s.empty?
-      datafiles.unshift(datafile) if File.exists?(datafile)
+    if !datafile.nil? && File.exists?(datafile)
+      datafiles = [datafile] + datafiles
     end
 
     desired = nil
@@ -132,8 +140,7 @@ This is for back compatibility to interpolate variables with %. % interpolation 
       end
     end
 
-    @opower_lookup_cache[key] = desired || default
-    desired || default or raise Puppet::ParseError, "No match found for '#{key}' in any data file during extlookup()"
+    @opower_extlookup_cache[key] = desired || default or raise Puppet::ParseError, "No match found for '#{key}' in any data file during extlookup()"
 
   end
 end

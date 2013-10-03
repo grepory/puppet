@@ -8,7 +8,7 @@ module Puppet::Parser::Functions
     # puts "val.inspect = #{val.inspect}"
     case val
     when String
-      # parse %{}'s in the CSV into local variables using lookupvar()
+      # parse %{}'s in the string into local variables using lookupvar()
       while val =~ /%\{(.+?)\}/
         val.gsub!(/%\{#{$1}\}/, lookupvar($1))
       end
