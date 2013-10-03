@@ -54,6 +54,7 @@ describe "the extlookup function" do
     t.close
     result = @scope.function_extlookup([ "key", "default", t.path])
     result.should =~ ["value1", "value2"]
+    t.unlink
   end
 
   it "should raise an error if there's no matching key and no default" do
@@ -64,6 +65,7 @@ describe "the extlookup function" do
     t.puts 'nonkey,nonvalue'
     t.close
     lambda { @scope.function_extlookup([ "key", nil, t.path]) }.should( raise_error(Puppet::ParseError))
+    t.unlink
   end
 
   describe "should look in $extlookup_datadir for data files listed by $extlookup_precedence" do
@@ -128,6 +130,7 @@ describe "the extlookup function" do
     t.close
     result = @scope.function_extlookup([ "key", "default", t.path])
     result.should =~ ["value1", "value2"]
+    t.unlink
   end
 
   it "should return a hash if the yaml file contains a hash" do
@@ -148,6 +151,7 @@ describe "the extlookup function" do
     result.should have_key('v2')
     result.should have(2).items
     result.should include('v1'=>'value1', 'v2'=>'value2')
+    t.unlink
   end
 
   it "should return expanded variables in yaml array values" do
@@ -163,6 +167,7 @@ describe "the extlookup function" do
     @scope.stubs(:lookupvar).with('foobar').returns('myfoobar')
     result = @scope.function_extlookup([ "key", "default", t.path])
     result.should =~ ['myfoobar','valmyfoobarue']
+    t.unlink
   end
  
   it "should return expanded variables in yaml hash values" do
@@ -182,6 +187,7 @@ describe "the extlookup function" do
     result.should have_key('v2')
     result.should have(2).items
     result.should include('v1'=>'myfoobar', 'v2'=>'valmyfoobarue')
+    t.unlink
   end
  
   it "should return expanded variables in yaml hash array values" do
@@ -204,6 +210,7 @@ describe "the extlookup function" do
     result.should have_key('v2')
     result.should have(2).items
     result['v1'].should =~ ["before", "myfoobar", "after"]
+    t.unlink
   end
  
   it "should unescape before parsing variables" do
@@ -216,6 +223,7 @@ describe "the extlookup function" do
     @scope.stubs(:lookupvar).with('foobar').returns('myfoobar')
     result = @scope.function_extlookup([ "key", "default", t.path])
     result.should == 'myfoobar'
+    t.unlink
   end
  
   it "should return expanded variables in yaml string values" do
@@ -228,6 +236,7 @@ describe "the extlookup function" do
     @scope.stubs(:lookupvar).with('foobar').returns('myfoobar')
     result = @scope.function_extlookup([ "key", "default", t.path])
     result.should == 'myfoobar'
+    t.unlink
   end
  
   it "should return expanded variables in csv" do
@@ -240,6 +249,7 @@ describe "the extlookup function" do
     @scope.stubs(:lookupvar).with('foobar').returns('myfoobar')
     result = @scope.function_extlookup([ "key", "default", t.path])
     result.should == 'myfoobar'
+    t.unlink
   end
 
   it "should return a cached value from csv" do
