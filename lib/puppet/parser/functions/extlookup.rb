@@ -1,5 +1,6 @@
 require 'yaml'
 require 'csv'
+require 'puppet/parser/opower'
 
 module Puppet::Parser::Functions
 
@@ -89,14 +90,15 @@ This is for back compatibility to interpolate variables with %. % interpolation 
 
     # Use two-level caching. The first cache is for each of the opower_lookup functions, the
     # second cache is for extlookup itself, as there is no need to defer to the second-order
-    # cache if we have already looked up key once. A cache miss in @opower_extlookup_cache yields
-    # population of @opower_lookup_cache. We can share cache between each of the functions because
+    # cache if we have already looked up key once. A cache miss in opower_extlookup_cache yields
+    # population of opower_lookup_cache. We can share cache between each of the functions because
     # we enforce strict file naming conventions.
     # There is no need to cache negatives, since we always cache a value (found value or default)
     # as failure to find a value raises an exception.
 
-    @opower_lookup_cache ||= {} # and log creation
-    @opower_extlookup_cache ||= {} # and log creation
+    cache = Puppet::Parser::Opower.cache(host)
+    opower_lookup_cache = cache.lookup
+    opower_extlookup_cache = cache.extlookup
 
     substitute_variables = lambda { |val|
       case val
@@ -116,8 +118,8 @@ This is for back compatibility to interpolate variables with %. % interpolation 
     }
 
     lookup_csv = lambda { |key, file|
-      @opower_lookup_cache[file] ||= CSV.read(file)
-      result = @opower_lookup_cache[file].find { |csv_key, _| csv_key == key }
+      opower_lookup_cache[file] ||= CSV.read(file)
+      result = opower_lookup_cache[file].find { |csv_key, _| csv_key == key }
 
       # return just the single result if there's just one,
       # else take all the fields in the csv and build an array
@@ -135,8 +137,8 @@ This is for back compatibility to interpolate variables with %. % interpolation 
     }
 
     lookup_yaml = lambda { |key, file|
-      @opower_lookup_cache[file] ||= YAML.load_file(file)
-      y = @opower_lookup_cache[file]
+      opower_lookup_cache[file] ||= YAML.load_file(file)
+      y = opower_lookup_cache[file]
       substitute_variables.call(y[key]) if y.has_key?(key)
     }
 
@@ -147,7 +149,7 @@ This is for back compatibility to interpolate variables with %. % interpolation 
 
     raise Puppet::ParseError, ("extlookup(): wrong number of arguments (#{args.length}; must be <= 3)") if args.length > 3
 
-    return @opower_extlookup_cache[key] if @opower_extlookup_cache.has_key?(key)
+    return opower_extlookup_cache[key] if opower_extlookup_cache.has_key?(key)
    
     supported_extensions = [ yaml_extension, csv_extension ]
 
@@ -183,7 +185,7 @@ This is for back compatibility to interpolate variables with %. % interpolation 
       end
     end
 
-    @opower_extlookup_cache[key] = desired || default or raise Puppet::ParseError, "No match found for '#{key}' in any data file during extlookup()"
+    opower_extlookup_cache[key] = desired || default or raise Puppet::ParseError, "No match found for '#{key}' in any data file during extlookup()"
 
   end
 end

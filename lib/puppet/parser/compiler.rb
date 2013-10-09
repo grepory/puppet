@@ -108,6 +108,9 @@ class Puppet::Parser::Compiler
 
     fail_on_unevaluated
 
+    # Invalidate node cache before returning catalog
+    Puppet::Parser::Opower.delete(@node.name)
+
     @catalog
   end
 

@@ -59,7 +59,7 @@ class Puppet::Parser::Scope
 
   # Proxy accessors
   def host
-    @compiler.node.name
+    compiler.node.name
   end
 
   # Is the value true?  This allows us to control the definition of truth

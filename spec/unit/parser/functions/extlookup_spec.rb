@@ -12,6 +12,12 @@ describe "the extlookup function" do
   before :each do
     @scope = Puppet::Parser::Scope.new
     @scope.stubs(:environment).returns(Puppet::Node::Environment.new('production'))
+    @scope.stubs(:host).returns('hostname')
+    Puppet::Parser::Opower.cache('hostname')
+  end
+
+  after :each do
+    Puppet::Parser::Opower.delete('hostname')
   end
 
   it "should exist" do
