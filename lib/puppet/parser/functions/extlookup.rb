@@ -84,9 +84,6 @@ This will result in /path/to/extdata/hosts/your.box.com.csv being searched.
 
 This is for back compatibility to interpolate variables with %. % interpolation is a workaround for a problem that has been fixed: Puppet variable interpolation at top scope used to only happen on each run.") do |args|
 
-    csv_extension = 'csv'
-    yaml_extension = 'yaml'
-
     # Use two-level caching. The first cache is for each of the opower_lookup functions, the
     # second cache is for extlookup itself, as there is no need to defer to the second-order
     # cache if we have already looked up key once. A cache miss in @opower_extlookup_cache yields
@@ -94,18 +91,61 @@ This is for back compatibility to interpolate variables with %. % interpolation 
     # we enforce strict file naming conventions.
     # There is no need to cache negatives, since we always cache a value (found value or default)
     # as failure to find a value raises an exception.
-    @opower_lookup_cache ||= {}
-    @opower_extlookup_cache ||= {}
+
+    @opower_lookup_cache ||= {} # and log creation
+    @opower_extlookup_cache ||= {} # and log creation
+
+    substitute_variables = lambda { |val|
+      case val
+      when String
+        # parse %{}'s in the string into local variables using lookupvar()
+        while val =~ /%\{(.+?)\}/
+          val.gsub!(/%\{#{$1}\}/, lookupvar($1))
+        end
+        val
+      when Array
+        val.map { |v| substitute_variables(v) }
+      when Hash
+        val.each_key { |k| val[k] = substitute_variables(val[k]) }
+      else
+        val
+      end
+    }
+
+    lookup_csv = lambda { |key, file|
+      @opower_lookup_cache[file] ||= CSV.read(file)
+      result = @opower_lookup_cache[file].find { |csv_key, _| csv_key == key }
+
+      # return just the single result if there's just one,
+      # else take all the fields in the csv and build an array
+      if result
+        if result.length == 2
+          function_substitute_variables([result[1].to_s])
+        elsif result.length > 1
+          # Individual cells in a CSV result are a weird data type and throws
+          # puppet's yaml parsing, so just map it all to plain old strings
+          result[1..-1].map do |v|
+            v = function_substitute_variables([v])
+          end
+        end
+      end
+    }
+
+    lookup_yaml = lambda { |key, file|
+      @opower_lookup_cache[file] ||= YAML.load_file(file)
+      y = @opower_lookup_cache[file]
+      function_substitute_variables([y[key]]) if y.has_key?(key)
+    }
+
+    csv_extension = 'csv'
+    yaml_extension = 'yaml'
     
-    (key, default, datafile) = args
+    (key, default, additional_datafiles) = args
 
     raise Puppet::ParseError, ("extlookup(): wrong number of arguments (#{args.length}; must be <= 3)") if args.length > 3
 
     return @opower_extlookup_cache[key] if @opower_extlookup_cache.has_key?(key)
    
-    # Pull in parse_csv, parse_yaml, substitute_variables, lookup_cache
-    Puppet::Parser::Functions.autoloader.loadall
-
     supported_extensions = [ yaml_extension, csv_extension ]
 
     extlookup_datadir = undef_as('',lookupvar('::extlookup_datadir'))
@@ -133,9 +173,9 @@ This is for back compatibility to interpolate variables with %. % interpolation 
       unless desired
         desired = case file.split('.').last.downcase
                   when csv_extension
-                    function_opower_lookup_csv([key, file])
+                    lookup_csv([key, file])
                   when yaml_extension
-                    function_opower_lookup_yaml([key, file])
+                    lookup_yaml([key, file])
                   end
       end
     end
