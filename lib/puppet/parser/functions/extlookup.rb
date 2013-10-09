@@ -1,3 +1,6 @@
+require 'yaml'
+require 'csv'
+
 module Puppet::Parser::Functions
 
   newfunction(:extlookup,
@@ -104,9 +107,9 @@ This is for back compatibility to interpolate variables with %. % interpolation 
         end
         val
       when Array
-        val.map { |v| substitute_variables(v) }
+        val.map { |v| substitute_variables.call(v) }
       when Hash
-        val.each_key { |k| val[k] = substitute_variables(val[k]) }
+        val.each_key { |k| val[k] = substitute_variables.call(val[k]) }
       else
         val
       end
@@ -120,12 +123,12 @@ This is for back compatibility to interpolate variables with %. % interpolation 
       # else take all the fields in the csv and build an array
       if result
         if result.length == 2
-          function_substitute_variables([result[1].to_s])
+          substitute_variables.call(result[1].to_s)
         elsif result.length > 1
           # Individual cells in a CSV result are a weird data type and throws
           # puppet's yaml parsing, so just map it all to plain old strings
           result[1..-1].map do |v|
-            v = function_substitute_variables([v])
+            v = substitute_variables.call(v)
           end
         end
       end
@@ -134,13 +137,13 @@ This is for back compatibility to interpolate variables with %. % interpolation 
     lookup_yaml = lambda { |key, file|
       @opower_lookup_cache[file] ||= YAML.load_file(file)
       y = @opower_lookup_cache[file]
-      function_substitute_variables([y[key]]) if y.has_key?(key)
+      substitute_variables.call(y[key]) if y.has_key?(key)
     }
 
     csv_extension = 'csv'
     yaml_extension = 'yaml'
     
-    (key, default, additional_datafiles) = args
+    (key, default, datafile) = args
 
     raise Puppet::ParseError, ("extlookup(): wrong number of arguments (#{args.length}; must be <= 3)") if args.length > 3
 
@@ -173,9 +176,9 @@ This is for back compatibility to interpolate variables with %. % interpolation 
       unless desired
         desired = case file.split('.').last.downcase
                   when csv_extension
-                    lookup_csv([key, file])
+                    lookup_csv.call(key, file)
                   when yaml_extension
-                    lookup_yaml([key, file])
+                    lookup_yaml.call(key, file)
                   end
       end
     end
